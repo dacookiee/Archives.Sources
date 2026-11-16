@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ARCHIVE</title>
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  * { box-sizing: border-box; border-radius: 0; }
+  body { font-family: "Courier New", monospace; background: #fff; color: #000; max-width: 960px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 48px; margin: 0 0 12px; border-bottom: 4px solid #000; }
+  input[type=text] { width: 100%; font: inherit; font-size: 22px; padding: 10px; border: 3px solid #000; outline: none; }
+  button, a.btn { font: inherit; background: #000; color: #fff; border: 3px solid #000; padding: 6px 12px; cursor: pointer; display: inline-block; margin: 4px 4px 4px 0; text-decoration: none; }
+  button:hover, a.btn:hover { background: #fff; color: #000; }
+  #status { min-height: 1.2em; margin: 8px 0; }
+  ul { list-style: none; padding: 0; margin: 12px 0; }
+  li { border: 3px solid #000; border-top: none; padding: 10px; cursor: pointer; font-size: 18px; }
+  li:first-child { border-top: 3px solid #000; }
+  li:hover { background: #000; color: #fff; }
+  .tag { display: inline-block; width: 60px; font-weight: bold; }
+  .grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .grid a { border: 3px solid #000; display: block; width: 220px; color: #000; text-decoration: none; font-size: 12px; word-break: break-all; }
+  .grid img { width: 100%; display: block; border-bottom: 3px solid #000; }
+  .grid span { display: block; padding: 4px; }
+  .doc { border: 3px solid #000; padding: 16px; margin: 0 0 12px; font-family: Georgia, serif; overflow-x: auto; }
+  .doc img { max-width: 100%; }
+  .row { border: 3px solid #000; padding: 10px; margin: 8px 0 0; font-size: 18px; }
+  .row a { color: #000; }
+  h2 { border-bottom: 3px solid #000; word-break: break-all; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<h1>ARCHIVE</h1>
+
+<div id="listView">
+  <input type="text" id="q" placeholder="SEARCH..." autocomplete="off">
+  <div id="status">LOADING...</div>
+  <ul id="list"></ul>
+</div>
+
+<div id="entryView" class="hidden">
+  <button id="back">&larr; BACK</button>
+  <h2 id="entryName"></h2>
+  <div id="entryBody"></div>
+</div>
+
+<script>
+/* ---- Optional: fill these in only if the automatic detection fails ---- */
+var CONFIG = { owner: '', repo: '', branch: '' };
+/* ----------------------------------------------------------------------- */
+
+var IMG = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+var entries = [], currentName = null;
+var $ = function (id) { return document.getElementById(id); };
+function status(t) { $('status').textContent = t; }
+
+function ext(n) { var p = n.split('.'); return p.length > 1 ? p.pop().toLowerCase() : ''; }
+function kindOf(n) {
+  var e = ext(n);
+  if (e === 'pdf') return 'pdf';
+  if (e === 'docx') return 'word';
+  if (IMG.indexOf(e) !== -1) return 'image';
+  return null;
+}
+function urlFor(path) { return path.split('/').map(encodeURIComponent).join('/'); }
+function tagFor(e) {
+  if (e.kind === 'folder') return '[DIR]';
+  var k = e.files[0].kind;
+  return k === 'pdf' ? '[PDF]' : k === 'word' ? '[DOC]' : '[IMG]';
+}
+
+/* ---------- figure out which repository this is ---------- */
+function detectRepo() {
+  var owner = CONFIG.owner, repo = CONFIG.repo;
+  var host = location.hostname;
+  if (!owner && /\.github\.io$/i.test(host)) owner = host.split('.')[0];
+  if (!repo) {
+    var first = location.pathname.split('/').filter(Boolean)[0];
+    repo = (first && !/\.html?$/i.test(first)) ? first : host;
+  }
+  return owner && repo ? { owner: owner, repo: repo } : null;
+}
+
+async function getJSON(url) {
+  var r = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+  if (r.status === 403 || r.status === 429) throw new Error('GITHUB LIMIT REACHED. TRY AGAIN IN A FEW MINUTES.');
+  if (!r.ok) throw new Error('GITHUB ERROR ' + r.status);
+  return r.json();
+}
+
+async function loadTree() {
+  var cacheKey = 'archive-tree';
+  try {
+    var c = JSON.parse(sessionStorage.getItem(cacheKey) || 'null');
+    if (c && Date.now() - c.t < 120000) return c.tree;
+  } catch (e) {}
+  var info = detectRepo();
+  if (!info) throw new Error('COULD NOT DETECT THE REPOSITORY. FILL IN CONFIG AT THE TOP OF index.html.');
+  var base = 'https://api.github.com/repos/' + info.owner + '/' + info.repo;
+  var branch = CONFIG.branch || (await getJSON(base)).default_branch;
+  var data = await getJSON(base + '/git/trees/' + encodeURIComponent(branch) + '?recursive=1');
+  var tree = data.tree.filter(function (x) { return x.type === 'blob'; }).map(function (x) { return x.path; });
+  try { sessionStorage.setItem(cacheKey, JSON.stringify({ t: Date.now(), tree: tree })); } catch (e) {}
+  return tree;
+}
+
+function buildEntries(paths) {
+  var folders = {}, out = [];
+  paths.forEach(function (p) {
+    var k = kindOf(p);
+    if (!k) return;
+    var parts = p.split('/');
+    var fname = parts[parts.length - 1];
+    if (parts.some(function (s) { return s.charAt(0) === '.' || s.charAt(0) === '_'; })) return;
+    var file = { path: p, name: fname, sub: parts.slice(1).join('/'), kind: k };
+    if (parts.length === 1) {
+      out.push({ name: fname, kind: 'file', files: [file] });
+    } else {
+      var top = parts[0];
+      if (!folders[top]) { folders[top] = { name: top, kind: 'folder', files: [] }; out.push(folders[top]); }
+      folders[top].files.push(file);
+    }
+  });
+  out.forEach(function (e) {
+    e.files.sort(function (a, b) { return a.sub.localeCompare(b.sub, undefined, { numeric: true, sensitivity: 'base' }); });
+  });
+  return out;
+}
+
+/* ---------- list + search ---------- */
+function renderList() {
+  var q = $('q').value.trim().toLowerCase();
+  var list = entries.filter(function (e) { return !q || e.name.toLowerCase().indexOf(q) !== -1; });
+  list.sort(function (a, b) {
+    if (q) {
+      var ap = a.name.toLowerCase().indexOf(q) === 0, bp = b.name.toLowerCase().indexOf(q) === 0;
+      if (ap !== bp) return ap ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+  });
+  var ul = $('list'); ul.innerHTML = '';
+  list.forEach(function (e) {
+    var li = document.createElement('li');
+    var t = document.createElement('span'); t.className = 'tag'; t.textContent = tagFor(e);
+    li.appendChild(t);
+    li.appendChild(document.createTextNode(e.name + (e.kind === 'folder' ? '  (' + e.files.length + ')' : '')));
+    li.addEventListener('click', function () { openEntry(e.name); });
+    ul.appendChild(li);
+  });
+  if (!list.length && entries.length) {
+    var li = document.createElement('li'); li.textContent = 'NO MATCH'; li.style.cursor = 'default'; ul.appendChild(li);
+  }
+}
+$('q').addEventListener('input', renderList);
+
+/* ---------- entry view ---------- */
+function showList() {
+  currentName = null;
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  $('entryView').classList.add('hidden');
+  $('listView').classList.remove('hidden');
+  renderList();
+}
+$('back').addEventListener('click', showList);
+
+function openEntry(name) {
+  var e = entries.filter(function (x) { return x.name === name; })[0];
+  if (!e) { showList(); return; }
+  currentName = name;
+  if (decodeURIComponent(location.hash.slice(1)) !== name) location.hash = encodeURIComponent(name);
+  $('listView').classList.add('hidden');
+  $('entryView').classList.remove('hidden');
+  $('entryName').textContent = tagFor(e) + ' ' + e.name;
+  var body = $('entryBody'); body.innerHTML = '';
+  window.scrollTo(0, 0);
+
+  var imgs = e.files.filter(function (f) { return f.kind === 'image'; });
+  var others = e.files.filter(function (f) { return f.kind !== 'image'; });
+  var label = function (f) { return e.kind === 'folder' ? f.sub : f.name; };
+
+  others.forEach(function (f) {
+    var url = urlFor(f.path);
+    var d = document.createElement('div'); d.className = 'row';
+    d.appendChild(document.createTextNode((f.kind === 'pdf' ? '[PDF] ' : '[DOC] ') + label(f) + '  '));
+    var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    if (f.kind === 'pdf') { a.textContent = '→ OPEN'; }
+    else { a.textContent = '↓ DOWNLOAD'; a.setAttribute('download', f.name); }
+    d.appendChild(a); body.appendChild(d);
+    if (f.kind === 'word') {
+      var doc = document.createElement('div'); doc.className = 'doc'; doc.textContent = 'LOADING...';
+      body.appendChild(doc);
+      fetch(url).then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); })
+        .then(function (buf) { return mammoth.convertToHtml({ arrayBuffer: buf }); })
+        .then(function (res) { doc.innerHTML = DOMPurify.sanitize(res.value); })
+        .catch(function () { doc.textContent = 'COULD NOT DISPLAY THIS DOCUMENT. USE DOWNLOAD.'; });
+    }
+  });
+
+  if (imgs.length) {
+    var g = document.createElement('div'); g.className = 'grid';
+    if (others.length) g.style.marginTop = '12px';
+    imgs.forEach(function (f) {
+      var a = document.createElement('a'); a.href = urlFor(f.path); a.target = '_blank'; a.rel = 'noopener';
+      var img = document.createElement('img'); img.src = urlFor(f.path); img.alt = f.name; img.loading = 'lazy';
+      var s = document.createElement('span'); s.textContent = label(f);
+      a.appendChild(img); a.appendChild(s); g.appendChild(a);
+    });
+    body.appendChild(g);
+  }
+}
+
+window.addEventListener('hashchange', function () {
+  var h = decodeURIComponent(location.hash.slice(1));
+  if (h && h !== currentName) openEntry(h);
+  else if (!h && currentName) showList();
+});
+
+/* ---------- start ---------- */
+(async function () {
+  try {
+    entries = buildEntries(await loadTree());
+    status(entries.length ? entries.length + ' ITEM(S)' : 'EMPTY. NOTHING UPLOADED YET.');
+    var h = decodeURIComponent(location.hash.slice(1));
+    if (h) openEntry(h); else renderList();
+  } catch (e) {
+    status(e.message);
+  }
+})();
+</script>
+</body>
+</html>

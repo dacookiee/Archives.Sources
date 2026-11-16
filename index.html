@@ -29,6 +29,15 @@
   .row a { color: #000; }
   h2 { border-bottom: 3px solid #000; word-break: break-all; }
   .hidden { display: none; }
+   @media (prefers-color-scheme: dark) {
+    body { background: #000; color: #fff; }
+    h1, h2, input[type=text], button, a.btn, li, li:first-child, .grid a, .grid img, .doc, .row { border-color: #fff; }
+    input[type=text] { background: #000; color: #fff; }
+    button, a.btn { background: #fff; color: #000; }
+    button:hover, a.btn:hover { background: #000; color: #fff; }
+    li:hover { background: #fff; color: #000; }
+    .grid a, .row a { color: #fff; }
+  }
 </style>
 </head>
 <body>

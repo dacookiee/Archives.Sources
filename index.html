@@ -29,18 +29,18 @@
   .row a { color: #000; }
   h2 { border-bottom: 3px solid #000; word-break: break-all; }
   .hidden { display: none; }
-   @media (prefers-color-scheme: dark) {
-    body { background: #000; color: #fff; }
-    h1, h2, input[type=text], button, a.btn, li, li:first-child, .grid a, .grid img, .doc, .row { border-color: #fff; }
-    input[type=text] { background: #000; color: #fff; }
-    button, a.btn { background: #fff; color: #000; }
-    button:hover, a.btn:hover { background: #000; color: #fff; }
-    li:hover { background: #fff; color: #000; }
-    .grid a, .row a { color: #fff; }
-  }
+  body.dark { background: #000; color: #fff; }
+  body.dark h1, body.dark h2, body.dark input[type=text], body.dark button, body.dark li, body.dark li:first-child, body.dark .grid a, body.dark .grid img, body.dark .doc, body.dark .row { border-color: #fff; }
+  body.dark input[type=text] { background: #000; color: #fff; }
+  body.dark button { background: #fff; color: #000; }
+  body.dark button:hover { background: #000; color: #fff; }
+  body.dark li:hover { background: #fff; color: #000; }
+  body.dark .grid a, body.dark .row a { color: #fff; }
+  #theme { float: right; margin-top: 12px; }
 </style>
 </head>
 <body>
+<button id="theme">DARK</button>
 <h1>ARCHIVE</h1>
 
 <div id="listView">
@@ -226,6 +226,17 @@ window.addEventListener('hashchange', function () {
   else if (!h && currentName) showList();
 });
 
+ /* ---------- dark mode ---------- */
+function setTheme(dark, save) {
+  document.body.classList.toggle('dark', dark);
+  $('theme').textContent = dark ? 'LIGHT' : 'DARK';
+  if (save) { try { localStorage.setItem('archive-theme', dark ? 'dark' : 'light'); } catch (e) {} }
+}
+var savedTheme = null;
+try { savedTheme = localStorage.getItem('archive-theme'); } catch (e) {}
+setTheme(savedTheme ? savedTheme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches, false);
+$('theme').addEventListener('click', function () { setTheme(!document.body.classList.contains('dark'), true); });
+ 
 /* ---------- start ---------- */
 (async function () {
   try {

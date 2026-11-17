@@ -37,6 +37,11 @@
   body.dark li:hover { background: #fff; color: #000; }
   body.dark .grid a, body.dark .row a { color: #fff; }
   #theme { float: right; margin-top: 12px; }
+
+   .card { width: 220px; }
+  a.archive { display: block; width: auto; background: #000; color: #fff !important; border: 3px solid #000; padding: 4px 6px; margin-top: -3px; text-decoration: none; font-size: 12px; }
+  body.dark a.archive { background: #fff; color: #000 !important; border-color: #fff; }
+ 
 </style>
 </head>
 <body>
@@ -116,7 +121,7 @@ async function loadTree() {
 }
 
 function buildEntries(paths) {
-  var folders = {}, out = [];
+  var folders = {}, out = [], links = {};   paths.forEach(function (p) { if (/\.link\.txt$/i.test(p)) links[p.replace(/\.link\.txt$/i, '')] = p; });
   paths.forEach(function (p) {
     var k = kindOf(p);
     if (!k) return;
@@ -196,7 +201,7 @@ function openEntry(name) {
     var a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener';
     if (f.kind === 'pdf') { a.textContent = '→ OPEN'; }
     else { a.textContent = '↓ DOWNLOAD'; a.setAttribute('download', f.name); }
-    d.appendChild(a); body.appendChild(d);
+    d.appendChild(a); body.appendChild(d); addArchiveLink(d, f);
     if (f.kind === 'word') {
       var doc = document.createElement('div'); doc.className = 'doc'; doc.textContent = 'LOADING...';
       body.appendChild(doc);
@@ -214,7 +219,7 @@ function openEntry(name) {
       var a = document.createElement('a'); a.href = urlFor(f.path); a.target = '_blank'; a.rel = 'noopener';
       var img = document.createElement('img'); img.src = urlFor(f.path); img.alt = f.name; img.loading = 'lazy';
       var s = document.createElement('span'); s.textContent = label(f);
-      a.appendChild(img); a.appendChild(s); g.appendChild(a);
+      a.appendChild(img); a.appendChild(s);       var card = document.createElement('div'); card.className = 'card';       card.appendChild(a); addArchiveLink(card, f); g.appendChild(card);
     });
     body.appendChild(g);
   }
@@ -236,6 +241,18 @@ var savedTheme = null;
 try { savedTheme = localStorage.getItem('archive-theme'); } catch (e) {}
 setTheme(savedTheme ? savedTheme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches, false);
 $('theme').addEventListener('click', function () { setTheme(!document.body.classList.contains('dark'), true); });
+
+ /* ---------- archived-copy links ---------- */
+function addArchiveLink(container, f) {
+  if (!f.link) return;
+  fetch(urlFor(f.link)).then(function (r) { if (!r.ok) throw 0; return r.text(); }).then(function (t) {
+    var url = t.trim().split(/\s+/)[0];
+    if (!/^https?:\/\//i.test(url)) return;
+    var a = document.createElement('a'); a.className = 'archive'; a.href = url; a.target = '_blank'; a.rel = 'noopener';
+    a.textContent = '→ ARCHIVED COPY';
+    container.appendChild(a);
+  }).catch(function () {});
+}
  
 /* ---------- start ---------- */
 (async function () {

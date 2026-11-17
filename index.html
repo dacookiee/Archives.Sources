@@ -249,7 +249,7 @@ function addArchiveLink(container, f) {
     var url = t.trim().split(/\s+/)[0];
     if (!/^https?:\/\//i.test(url)) return;
     var a = document.createElement('a'); a.className = 'archive'; a.href = url; a.target = '_blank'; a.rel = 'noopener';
-    a.textContent = '→ ARCHIVED COPY';
+    a.textContent = '→ SOURCE';
     container.appendChild(a);
   }).catch(function () {});
 }

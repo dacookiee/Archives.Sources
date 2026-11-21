@@ -42,7 +42,10 @@
   a.archive { display: block; width: auto; color: #1a4dff !important; border: none !important; padding: 6px 4px; text-decoration: underline; font-size: 26px; font-weight: bold; }
   body.dark a.archive { color: #5c9dff !important; }
   .grid img { max-height: 320px; object-fit: cover; object-position: top; }
- 
+
+  .grid img { clip-path: inset(0 0 100% 0); }
+  .grid img:not(.loaded) { height: 320px; }
+  .grid img.loaded { clip-path: inset(0 0 0 0); transition: clip-path 1.5s ease-out; }
 </style>
 </head>
 <body>
@@ -218,7 +221,7 @@ function openEntry(name) {
     if (others.length) g.style.marginTop = '12px';
     imgs.forEach(function (f) {
       var a = document.createElement('a'); a.href = urlFor(f.path); a.target = '_blank'; a.rel = 'noopener';
-      var img = document.createElement('img'); img.src = urlFor(f.path); img.alt = f.name; img.loading = 'lazy';
+      var img = document.createElement('img'); img.onload = img.onerror = function () { this.classList.add('loaded'); }; img.src = urlFor(f.path); img.alt = f.name; img.loading = 'lazy';
       var s = document.createElement('span'); s.textContent = label(f);
       a.appendChild(img); a.appendChild(s);       var card = document.createElement('div'); card.className = 'card';       card.appendChild(a); addArchiveLink(card, f); g.appendChild(card);
     });

@@ -46,6 +46,10 @@
   .grid img { clip-path: inset(0 0 100% 0); }
   .grid img:not(.loaded) { height: 320px; }
   .grid img.loaded { clip-path: inset(0 0 0 0); transition: clip-path 1.5s ease-out; }
+  .grid a { position: relative; }
+  .prog { position: absolute; top: 0; left: 0; right: 0; height: 320px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; font-size: 14px; }
+  .prog .bar { width: 70%; height: 8px; border: 2px solid currentColor; }
+  .prog .fill { height: 100%; width: 0; background: currentColor; transition: width 0.3s linear; }
 </style>
 </head>
 <body>
@@ -221,7 +225,7 @@ function openEntry(name) {
     if (others.length) g.style.marginTop = '12px';
     imgs.forEach(function (f) {
       var a = document.createElement('a'); a.href = urlFor(f.path); a.target = '_blank'; a.rel = 'noopener';
-      var img = document.createElement('img'); img.onload = img.onerror = function () { this.classList.add('loaded'); }; img.src = urlFor(f.path); img.alt = f.name; img.loading = 'lazy';
+      var img = document.createElement('img'); img.onload = img.onerror = function () { this.classList.add('loaded'); }; img.alt = f.name; loadWithProgress(img, urlFor(f.path), a);
       var s = document.createElement('span'); s.textContent = label(f);
       a.appendChild(img); a.appendChild(s);       var card = document.createElement('div'); card.className = 'card';       card.appendChild(a); addArchiveLink(card, f); g.appendChild(card);
     });
@@ -256,6 +260,28 @@ function addArchiveLink(container, f) {
     a.textContent = 'SOURCE';
     container.appendChild(a);
   }).catch(function () {});
+}
+
+ /* ---------- image loading with progress ---------- */
+function loadWithProgress(img, url, box) {
+  var prog = document.createElement('div'); prog.className = 'prog';
+  var label = document.createElement('div'); label.textContent = 'LOADING...';
+  var bar = document.createElement('div'); bar.className = 'bar';
+  var fill = document.createElement('div'); fill.className = 'fill';
+  bar.appendChild(fill); prog.appendChild(label); prog.appendChild(bar); box.appendChild(prog);
+  var done = function () { if (prog.parentNode) prog.parentNode.removeChild(prog); };
+  img.addEventListener('load', done); img.addEventListener('error', done);
+  fetch(url).then(async function (r) {
+    if (!r.ok || !r.body) throw 0;
+    var total = +r.headers.get('content-length') || 0, got = 0, chunks = [], reader = r.body.getReader();
+    while (true) {
+      var res = await reader.read();
+      if (res.done) break;
+      chunks.push(res.value); got += res.value.length;
+      if (total) { var p = Math.min(100, Math.round(got / total * 100)); fill.style.width = p + '%'; label.textContent = 'LOADING ' + p + '%'; }
+    }
+    img.src = URL.createObjectURL(new Blob(chunks));
+  }).catch(function () { img.src = url; });
 }
  
 /* ---------- start ---------- */
